@@ -95,6 +95,7 @@ tasks.named<ShadowJar>("shadowJar") {
     relocate("org.intellij", relocation + "intellij")
     relocate("de.themoep", relocation + "themoep")
     relocate("me.tofaa.entitylib", relocation + "entitylib")
+    relocate("io.github.tofaa2", relocation + "entitylib")
     relocate("com.jonahseguin.drink", relocation + "drink")
     relocate("javax.annotation", relocation + "annotation")
     relocate("com.github.Anon8281.universalScheduler", relocation + "universalScheduler")
@@ -116,6 +117,8 @@ tasks.named<ShadowJar>("shadowJar") {
         exclude(dependency("net.kyori:text"))
         exclude(dependency("net.kyori:adventure-text-serializer-gson"))
         exclude(dependency("net.kyori:adventure-text-serializer-json"))
+        exclude(dependency("io.github.tofaa2:spigot"))
+        exclude(dependency("com.github.Tofaa2.EntityLib:spigot"))
     }
 
     //mappings

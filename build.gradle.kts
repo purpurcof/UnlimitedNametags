@@ -91,6 +91,7 @@ dependencies {
 
 tasks.named<ShadowJar>("shadowJar") {
     val relocation = "org.alexdev.unlimitednametags.libraries."
+    relocate("me.tofaa.entitylib", relocation + "entitylib") 
     relocate("net.byteflux.libby", relocation + "libby.bukkit")
     relocate("org.jetbrains", relocation + "jetbrains")
     relocate("org.intellij", relocation + "intellij")
@@ -118,8 +119,6 @@ tasks.named<ShadowJar>("shadowJar") {
         exclude(dependency("net.kyori:text"))
         exclude(dependency("net.kyori:adventure-text-serializer-gson"))
         exclude(dependency("net.kyori:adventure-text-serializer-json"))
-        exclude(dependency("io.github.tofaa2:spigot"))
-        exclude(dependency("com.github.Tofaa2.EntityLib:spigot"))
     }
 
     //mappings

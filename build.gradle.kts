@@ -35,6 +35,7 @@ repositories {
     maven("https://repo.nexomc.com/snapshots/")
     maven("https://repo.nexomc.com/releases")
     maven("https://repo.md-5.net/content/groups/public/")
+    maven("https://mvn.lib.co.nz/releases") 
     maven {
         name = "feather-repo"
         url = uri("https://repo.feathermc.net/artifactory/maven-releases")

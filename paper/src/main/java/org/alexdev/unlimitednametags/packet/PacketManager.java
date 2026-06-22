@@ -7,7 +7,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.github.retrooper.packetevents.util.SpigotReflectionUtil;
 import me.tofaa.entitylib.APIConfig;
 import me.tofaa.entitylib.EntityLib;
-import me.tofaa.entitylib.spigot.UntSpigotEntityLibPlatform;
+import me.tofaa.entitylib.spigot.SpigotEntityLibPlatform;
 import org.alexdev.unlimitednametags.UnlimitedNameTags;
 import org.alexdev.unlimitednametags.platform.NametagPassengerSource;
 import org.alexdev.unlimitednametags.data.ConcurrentMultimap;
@@ -46,7 +46,7 @@ public class PacketManager {
     }
 
     private void initialize() {
-        final UntSpigotEntityLibPlatform platform = new UntSpigotEntityLibPlatform(plugin);
+        final SpigotEntityLibPlatform platform = new SpigotEntityLibPlatform(plugin);
         final APIConfig settings = new APIConfig(PacketEvents.getAPI())
                 .usePlatformLogger();
         EntityLib.init(platform, settings);

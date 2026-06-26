@@ -39,33 +39,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Import GPG key
-        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-
       - name: Publish release artifacts
         run: >
-          ./gradlew :common:publish :api:publish :api-paper:publish
+          bash ./gradlew :common:publish :api:publish :api-paper:publish
           -Pversion=$VERSION
           --no-daemon
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signing_gnupg_keyName: ${{ secrets.GPG_KEY_ID }}
-          ORG_GRADLE_PROJECT_signing_gnupg_passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      - name: Submit deployment to Central Portal
-        run: |
-          AUTH=$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 -w0)
-          curl -fsSL -X POST \
-            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.alexdev03" \
-            -H "Authorization: Bearer $AUTH"
-        env:
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Release reminder
         run: |
-          echo "Deployment submitted to Central Portal."
+          echo "Release artifacts uploaded to the Maven Central staging repository."
           echo "Open https://central.sonatype.com/ → Deployments → Refresh → Publish for version $VERSION."

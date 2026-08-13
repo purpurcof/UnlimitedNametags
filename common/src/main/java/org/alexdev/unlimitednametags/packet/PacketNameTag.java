@@ -921,7 +921,12 @@ public abstract class PacketNameTag implements AnimationPoseTarget, NametagPasse
         if (tn != null) {
             tn.onViewerDetached(viewerId);
         }
-        perPlayerEntity.getEntities().remove(viewerId);
+        final WrapperEntity wrapperEntity = perPlayerEntity.getEntities().get(viewerId);
+        if (wrapperEntity != null) {
+            wrapperEntity.removeViewer(viewerId);
+            perPlayerEntity.getEntities().remove(viewerId, wrapperEntity);
+        }
+        runtime.removePassenger(viewerId, entityId);
     }
 
     public boolean canViewerSee(@NotNull UUID viewerId) {

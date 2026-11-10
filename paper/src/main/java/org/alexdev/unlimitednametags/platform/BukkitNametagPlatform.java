@@ -120,6 +120,9 @@ public final class BukkitNametagPlatform implements NametagPlatformBridge {
         if (plugin.getNametagManager().isBlocked(ownerPlayer)) {
             return "owner is blocked";
         }
+        if (plugin.getNametagManager().isHiddenByCommand(ownerPlayer)) {
+            return "owner is hidden with /unt hide";
+        }
         if (!viewerSupportsTextDisplay(viewerId)) {
             return "viewer client does not support text displays";
         }
@@ -138,6 +141,10 @@ public final class BukkitNametagPlatform implements NametagPlatformBridge {
         }
 
         final boolean isOwnerViewer = viewerId.equals(owner);
+        if (!isOwnerViewer && (!plugin.getPacketManager().knowsOwner(resolveUser(viewerId), ownerPlayer)
+                || plugin.getTrackerManager().isTrackingVetoed(viewerId, owner))) {
+            return "owner spawn has not been sent to this viewer";
+        }
         if (!isOwnerViewer && !viewer.hasPermission("unt.shownametags")) {
             return "viewer lacks permission unt.shownametags";
         }

@@ -2,6 +2,7 @@ package org.alexdev.unlimitednametags.listeners;
 
 import com.github.Anon8281.universalScheduler.scheduling.tasks.MyScheduledTask;
 import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.player.User;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import lombok.Getter;
@@ -38,6 +39,7 @@ public class PlayerListener implements PackSendHandler {
     private final Map<UUID, MyScheduledTask> teleportSyncTasks;
     private final Map<UUID, UUID> teleportSyncRunIds;
     private final Map<UUID, UUID> zeroDamageRecoveryRunIds;
+    private final Map<UUID, UUID> gameModeRecoveryRunIds;
     private final Map<UUID, MyScheduledTask> respawnShowTasks;
     private final Map<UUID, Location> playerWorlds;
     private static final long[] TELEPORT_SYNC_DELAYS = {5L, 20L, 60L, 100L};
@@ -51,6 +53,7 @@ public class PlayerListener implements PackSendHandler {
         this.teleportSyncTasks = Maps.newConcurrentMap();
         this.teleportSyncRunIds = Maps.newConcurrentMap();
         this.zeroDamageRecoveryRunIds = Maps.newConcurrentMap();
+        this.gameModeRecoveryRunIds = Maps.newConcurrentMap();
         this.respawnShowTasks = Maps.newConcurrentMap();
         this.playerWorlds = Maps.newConcurrentMap();
         this.loadRespawnSafetyTask();
@@ -135,7 +138,8 @@ public class PlayerListener implements PackSendHandler {
             return Optional.empty();
         }
 
-        return Optional.ofNullable(plugin.getServer().getPlayer(player));
+        return Optional.ofNullable(plugin.getServer().getPlayer(player))
+                .filter(online -> online.getEntityId() == entityId);
     }
 
     /**
@@ -181,6 +185,18 @@ public class PlayerListener implements PackSendHandler {
         playerEntityId.put(event.getPlayer().getEntityId(), event.getPlayer().getUniqueId());
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onChangedWorld(@NotNull PlayerChangedWorldEvent event) {
+        final Player player = event.getPlayer();
+        plugin.getNametagManager().removePlayer(player);
+        plugin.getPacketEventsListener().onWorldChange(player);
+        plugin.getTaskScheduler().runTaskLaterAsynchronously(() -> {
+            if (player.isOnline()) {
+                plugin.getNametagManager().addPlayer(player, false);
+            }
+        }, 1L);
+    }
+
     @EventHandler(priority = EventPriority.LOWEST)
     public void onQuit(@NotNull PlayerQuitEvent event) {
         plugin.getPacketEventsListener().removePlayerData(event.getPlayer());
@@ -188,16 +204,19 @@ public class PlayerListener implements PackSendHandler {
         diedPlayers.remove(event.getPlayer().getUniqueId());
         cancelTeleportSync(event.getPlayer().getUniqueId());
         zeroDamageRecoveryRunIds.remove(event.getPlayer().getUniqueId());
+        gameModeRecoveryRunIds.remove(event.getPlayer().getUniqueId());
         cancelRespawnShow(event.getPlayer().getUniqueId());
-        plugin.getTaskScheduler().runTaskAsynchronously(() -> {
-            plugin.getNametagManager().removePlayer(event.getPlayer());
-            plugin.getNametagManager().clearCache(event.getPlayer().getUniqueId());
-            plugin.getPlaceholderManager().removePlayer(event.getPlayer());
-            diedPlayers.remove(event.getPlayer().getUniqueId());
-            onlinePlayers.remove(event.getPlayer().getUniqueId());
-            playerEntityId.remove(event.getPlayer().getEntityId());
-            playerWorlds.remove(event.getPlayer().getUniqueId());
-        });
+        // Finish old-session cleanup before a rejoin with the same UUID can be registered.
+        plugin.getTrackerManager().handleQuit(event.getPlayer());
+        final User quittingUser = PacketEvents.getAPI().getPlayerManager().getUser(event.getPlayer());
+        if (quittingUser != null) plugin.getPacketManager().reset(quittingUser);
+        plugin.getNametagManager().removePlayer(event.getPlayer());
+        plugin.getNametagManager().clearCache(event.getPlayer().getUniqueId());
+        plugin.getPlaceholderManager().removePlayer(event.getPlayer());
+        diedPlayers.remove(event.getPlayer().getUniqueId());
+        onlinePlayers.remove(event.getPlayer().getUniqueId(), event.getPlayer());
+        playerEntityId.remove(event.getPlayer().getEntityId());
+        playerWorlds.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -244,12 +263,31 @@ public class PlayerListener implements PackSendHandler {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onGameModeChange(@NotNull PlayerGameModeChangeEvent e) {
-        if (e.getPlayer().getGameMode() == GameMode.SPECTATOR) {
-            plugin.getNametagManager().unblockPlayer(e.getPlayer());
-            plugin.getNametagManager().showToTrackedPlayers(e.getPlayer());
-        } else if (e.getNewGameMode() == GameMode.SPECTATOR) {
-            plugin.getNametagManager().removeAllViewers(e.getPlayer());
+        final Player player = e.getPlayer();
+        final UUID uuid = player.getUniqueId();
+        if (e.getNewGameMode() == GameMode.SPECTATOR) {
+            gameModeRecoveryRunIds.remove(uuid);
+            plugin.getNametagManager().removeAllViewers(player);
+            return;
         }
+        if (player.getGameMode() != GameMode.SPECTATOR) {
+            return;
+        }
+
+        final UUID runId = UUID.randomUUID();
+        gameModeRecoveryRunIds.put(uuid, runId);
+        plugin.getTaskScheduler().runTaskLater(player, () -> {
+            if (!runId.equals(gameModeRecoveryRunIds.get(uuid))) {
+                return;
+            }
+            gameModeRecoveryRunIds.remove(uuid, runId);
+            if (!player.isOnline() || player.getGameMode() == GameMode.SPECTATOR) {
+                return;
+            }
+
+            plugin.getNametagManager().unblockPlayer(player);
+            plugin.getNametagManager().showToTrackedPlayers(player);
+        }, 1L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
@@ -398,6 +436,15 @@ public class PlayerListener implements PackSendHandler {
         });
     }
     
+    /** Re-runs the post-teleport visibility recovery, e.g. after a same-level respawn sent by another plugin. */
+    public void scheduleNametagResync(@NotNull Player player) {
+        plugin.getTaskScheduler().runTask(player, () -> {
+            if (player.isOnline()) {
+                scheduleTeleportSync(player);
+            }
+        });
+    }
+
     private void scheduleTeleportSync(@NotNull Player player) {
         final UUID uuid = player.getUniqueId();
         cancelTeleportSync(uuid);
@@ -471,6 +518,7 @@ public class PlayerListener implements PackSendHandler {
         teleportSyncTasks.clear();
         teleportSyncRunIds.clear();
         zeroDamageRecoveryRunIds.clear();
+        gameModeRecoveryRunIds.clear();
         respawnShowTasks.values().forEach(MyScheduledTask::cancel);
         respawnShowTasks.clear();
     }
